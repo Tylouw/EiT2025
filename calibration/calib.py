@@ -75,12 +75,35 @@ def quat_to_R(qx, qy, qz, qw):
     ], dtype=float)
     return R
 
-def Rt_to_T(R, t):
-    import numpy as np
-    T = np.eye(4, dtype=float)
-    T[:3, :3] = np.asarray(R, dtype=float)
-    T[:3, 3]  = np.asarray(t, dtype=float).reshape(3)  # accepts (3,), (3,1), (1,3)
-    return T
+# def Rt_to_T(R, t):
+#     import numpy as np
+#     T = np.eye(4, dtype=float)
+#     T[:3, :3] = np.asarray(R, dtype=float)
+#     T[:3, 3]  = np.asarray(t, dtype=float).reshape(3)  # accepts (3,), (3,1), (1,3)
+#     return T
+
+def axis_angle_to_rot_matrix(r):
+    """
+    Convert UR axis-angle vector (rx, ry, rz) to a 3x3 rotation matrix.
+    """
+    theta = np.linalg.norm(r)
+    
+    # If angle ~ 0, return identity
+    if theta < 1e-8:
+        return np.eye(3)
+
+    # Normalized rotation axis
+    k = r / theta
+    kx, ky, kz = k
+
+    K = np.array([
+        [0,   -kz,  ky],
+        [kz,   0,  -kx],
+        [-ky,  kx,   0]
+    ])
+
+    R = np.eye(3) + np.sin(theta) * K + (1 - np.cos(theta)) * (K @ K)
+    return R
 
 
 
@@ -258,8 +281,9 @@ def load_images(folder, pattern):
 
 def read_poses(csv_path, args):
     df = pd.read_csv(csv_path)
-    required = [args.csv_filename_col, args.csv_px, args.csv_py, args.csv_pz,
-                args.csv_qx, args.csv_qy, args.csv_qz, args.csv_qw]
+    # required = [args.csv_filename_col, args.csv_px, args.csv_py, args.csv_pz,
+    #             args.csv_qx, args.csv_qy, args.csv_qz, args.csv_qw]
+    required = ["filename", "px", "py", "pz", "rx", "ry", "rz"]
     for c in required:
         if c not in df.columns:
             raise ValueError(f"CSV missing required column: {c}")
@@ -371,6 +395,7 @@ def estimate_charuco_pose_pnp(charuco_corners, charuco_ids, board, K, D):
 
 
 def main():
+    # print(list(ARUCO_DICT_MAP.keys()))
     args = parse_args()
 
     K, D = load_intrinsics(args.intrinsics)
@@ -399,9 +424,19 @@ def main():
 
         # Robot pose from CSV
         px, py, pz = float(row[args.csv_px]), float(row[args.csv_py]), float(row[args.csv_pz])
-        qx, qy, qz, qw = float(row[args.csv_qx]), float(row[args.csv_qy]), float(row[args.csv_qz]), float(row[args.csv_qw])
-        R_b2g = quat_to_R(qx, qy, qz, qw)
+        # qx, qy, qz, qw = float(row[args.csv_qx]), float(row[args.csv_qy]), float(row[args.csv_qz]), float(row[args.csv_qw])
+        rx, ry, rz = float(row["rx"]), float(row["ry"]), float(row["rz"])
+        # R_b2g = quat_to_R(qx, qy, qz, qw)
+        R_b2g = axis_angle_to_rot_matrix(np.array([rx, ry, rz], dtype=float))
         t_b2g = np.array([px, py, pz], dtype=float)
+        tcp_to_marker = np.array([[0.0, -1.0, 0.0, 0.09703],
+                                    [0.0, 0.0, -1.0, 0.01049],
+                                    [1.0, 0.0, 0.0, 0.00007],
+                                    [0.0, 0.0, 0.0, 1.0]])
+
+        tcp_to_marker = np.linalg.inv(tcp_to_marker)
+        # T_b_g = Rt_to_T(R_b2g, t_b2g) @ tcp_to_marker  # BASE->GRIPPER @ TCP->MARKER
+
         T_b_g = Rt_to_T(R_b2g, t_b2g)
 
         if args.robot_frame == "base_to_gripper":
@@ -439,6 +474,17 @@ def main():
 
         R_t2c = rodrigues_to_R(rvec)
         t_t2c = tvec.reshape(3)
+        # print(t_t2c)
+
+        # Convert from corner frame to marker frame
+        # T_t2c = Rt_to_T(R_t2c, t_t2c)
+        # # T_t2c = np.linalg.inv(tcp_to_marker) @ T_t2c
+        # T_t2c = tcp_to_marker @ T_t2c
+
+        # # Now use these transformed poses
+        # R_t2c = T_t2c[:3, :3]
+        # t_t2c = T_t2c[:3, 3]
+        # # print(t_t2c)
 
         R_g2b_list.append(R_g2b)
         t_g2b_list.append(t_g2b)
@@ -468,6 +514,7 @@ def main():
         sys.exit(2)
 
     # OpenCV calibrateHandEye
+    print(t_g2b_list)
     R_cam2gripper, t_cam2gripper = cv2.calibrateHandEye(
         R_gripper2base=R_g2b_list,
         t_gripper2base=t_g2b_list,
@@ -475,6 +522,8 @@ def main():
         t_target2cam=t_t2c_list,
         method=cv2.CALIB_HAND_EYE_TSAI  # or CALIB_HAND_EYE_PARK / DANIILIDIS / HORAUD
     )
+
+    # print(t_cam2gripper)
 
     t_cam2gripper = np.asarray(t_cam2gripper, dtype=float).reshape(3)
 
