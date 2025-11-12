@@ -145,7 +145,7 @@ def main():
     print("Final hand-eye calibration matrix (camera to gripper):")
     print(final_mat)
 
-    point = np.array([ 0.043845969260806764, 0.07372129513701225, 0.6628921983759364, 1.0])#
+    point = np.array([ 0.133493572473526, -0.086402028799057, 0.6330000162124634, 1.0])#
 
     res = final_mat @ point
     print(res )
