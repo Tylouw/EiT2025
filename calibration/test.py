@@ -30,9 +30,9 @@ tcp_to_marker = np.array([[1.0, 0.0, 0.0, 0.09703],
  [0.0, 0.0, 0.0, 1.0]])
 
 point_correction = np.array([-0.09, 0.140,  0.0, 0.0])
-point = np.array([ 0.133493572473526, -0.086402028799057, 0.6330000162124634, 1.0])# + point_correction
+point = np.array([ 0.1375, -0.5674, -0.0257, 1.0])# + point_correction
 
-res = mat @ point
+res = np.linalg.inv(mat) @ point
 print(res )#+ point_correction)
 
 

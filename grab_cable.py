@@ -5,6 +5,7 @@ from rtde_control import RTDEControlInterface as RTDEControl
 from rtde_receive import RTDEReceiveInterface as RTDEReceive
 from rtde_io import RTDEIOInterface as RTDEIO
 
+print("moin")
 rtde_c = RTDEControl("192.168.1.100")
 rtde_r = RTDEReceive("192.168.1.100")
 rtde_io = RTDEIO("192.168.1.100")
@@ -86,12 +87,11 @@ def ur_upright_x_align_rotvec(v, eps=1e-12):
     return rvec
 
 
-
-def main():
+def pick_up_cable(p1_cam, p2_cam):
     rtde_io.setStandardDigitalOut(0, True)  # gripper open
     # for i in range(len(cable_points)-1):
-    p1 = mat @ np.array(cable_points[6].tolist() + [1])
-    p2 = mat @ np.array(cable_points[7].tolist() + [1])
+    p1 = mat @ np.array(p1_cam.tolist() + [1])
+    p2 = mat @ np.array(p2_cam.tolist() + [1])
     direction = p2 - p1
     rvec = ur_upright_x_align_rotvec(direction[:3])
     pose = [p1[0], p1[1], 0.02, rvec[0], rvec[1], rvec[2]]
@@ -108,6 +108,27 @@ def main():
     pose = [p1[0], p1[1], 0.02, rvec[0], rvec[1], rvec[2]]
     rtde_c.moveL(pose, speed=0.06)
 
+def drive_to_point(point):
+    p_transformed = mat @ np.array(point.tolist() + [1])
+    pose = [p_transformed[0], p_transformed[1], 0.02, 3.14159, 0.0, 0.0]
+    rtde_c.moveL(pose)
+
+    pose = [p_transformed[0], p_transformed[1], -0.02, 3.14159, 0.0, 0.0]
+    print(pose)
+    rtde_c.moveL(pose, speed=0.03)
+
+
+def main():
+    print("debug1")
+    #pick_up_cable(x,y)
+    p = np.array([0.1584, -0.1375, 0.6294, 1.0])
+    print("debug1")
+    # drive_to_point(p)
+    print(mat @ p)
+    print("debug1")
+    
+
 
 if __name__ == "__main__":
+    print("debug1")
     main()
